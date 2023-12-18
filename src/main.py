@@ -208,7 +208,28 @@ class XDrive:
             xdrive.group[2].spin(FORWARD, mr3, PERCENT)
             xdrive.group[3].spin(FORWARD, mr4, PERCENT)
 
+class Puncher:
+    def __init__(self, port):
+        """
+        Initialize the puncher motor.
+        """
+        self.motor = Motor(port)
+        self.active = False
 
+    def run(self, speed) -> None:
+        """
+        Run the puncher motor at the given speed.
+        """
+        self.motor.spin(FORWARD, speed, PERCENT)
+
+    def stop(self) -> None:
+        """
+        Stop the puncher motor.
+        """
+        self.motor.stop(BRAKE)
+
+    
+puncher = Puncher(Ports.PORT7) # Initialize the puncher mechanism
 xdrive = XDrive(Ports.PORT1, Ports.PORT2, Ports.PORT4, Ports.PORT5) # Initialize the XDrive
 controller = Controller() # Initialize the controller
 
@@ -217,9 +238,19 @@ def control_loop():
     The control loop of the XDrive robot. 
     This is where interactions with the controller take place.
     """
-    while True:
+    while True: 
+        # Handle movement for the puncher
+        if controller.buttonA.pressing():
+            puncher.active = not puncher.active
+
+        if puncher.active:
+            puncher.run(100)
+
+        if controller.buttonR1.pressing():
+            puncher.run(100)
+
+        # Handle the XDrive movement
         xdrive.process_input(controller)
-        sleep(10)
 
 
 Thread(control_loop()) # Start the control loop
