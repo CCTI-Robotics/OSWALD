@@ -9,6 +9,7 @@
 
 # Library imports
 from vex import *
+import math
 
 # Brain should be defined by default
 brain = Brain()
@@ -19,6 +20,7 @@ class XMode:
     """
     SINGLE_MOVE = 0
     FLUID = 1
+    FIELD_CENTRIC = 2
 
 class XMotorGroup:
     def __init__(self, *motors: Motor):
@@ -67,6 +69,7 @@ class XDrive:
         m2 = Motor(m2port)
         m3 = Motor(m3port, True)
         m4 = Motor(m4port, True)
+        self.imu = Inertial(Ports.PORT10)
 
         self.mode = mode
         self.group = XMotorGroup(m1, m2, m3, m4)
@@ -132,7 +135,7 @@ class XDrive:
         left_x = controller.axis4.position()
         right_x = controller.axis1.position()
 
-        if self.mode == XMode.FLUID:
+        if self.mode == XMode.FLUID or self.mode == XMode.FIELD_CENTRIC:
             self.move_fluid(left_y, left_x, right_x)
 
         elif self.mode == XMode.SINGLE_MOVE:
@@ -148,25 +151,25 @@ class XDrive:
         # move the XDrive in the direction of the joystick.
 
         if left_y > 10:
-            xdrive.move_up(left_y)
+            self.move_up(left_y)
 
         elif left_y < -10:
-            xdrive.move_down(abs(left_y))
+            self.move_down(abs(left_y))
         
         elif left_x > 10:
-            xdrive.move_right(left_x)
+            self.move_right(left_x)
 
         elif left_x < -10:
-            xdrive.move_left(abs(left_x))
+            self.move_left(abs(left_x))
 
         elif right_x > 10:
-            xdrive.turn_right(right_x)
+            self.turn_right(right_x)
 
         elif right_x < -10:
-            xdrive.turn_left(abs(right_x))
+            self.turn_left(abs(right_x))
 
         else:
-            xdrive.stop()
+            self.stop()
 
     def move_fluid(self, left_y, left_x, right_x) -> None:
         mr1 = 0
@@ -200,13 +203,41 @@ class XDrive:
             mr4 += left_x
             
         if not (mr1 or mr2 or mr3 or mr4):
-            xdrive.stop()
+            self.stop()
 
         else:
-            xdrive.group[0].spin(FORWARD, mr1, PERCENT)
-            xdrive.group[1].spin(FORWARD, mr2, PERCENT)
-            xdrive.group[2].spin(FORWARD, mr3, PERCENT)
-            xdrive.group[3].spin(FORWARD, mr4, PERCENT)
+            if self.mode == XMode.FIELD_CENTRIC:
+                mr1, mr2, mr3, mr4 = self.get_centric_power(left_x, left_y, right_x)
+            self.group[0].spin(FORWARD, mr1, PERCENT)
+            self.group[1].spin(FORWARD, mr2, PERCENT)
+            self.group[2].spin(FORWARD, mr3, PERCENT)
+            self.group[3].spin(FORWARD, mr4, PERCENT)
+
+    def get_centric_power(self, x, y, rx) -> tuple[float, float, float, float]:
+        """
+        To calculate the power of field-centric movement. Still in development and 
+        does not work.
+        """
+        heading = self.imu.heading()
+        heading = heading * (math.pi / 180) # Convert to radians
+
+        print(heading)
+
+        rotation_x = x * math.cos(-heading) - y * math.sin(-heading)
+        rotation_y = x * math.sin(-heading) + y * math.cos(-heading)
+
+        denominator = max(abs(rotation_y) + abs(rotation_x) + abs(rx), 1)
+        front_left_power = (rotation_y + rotation_x + rx) / denominator
+        back_left_power = (rotation_y - rotation_x + rx) / denominator
+        front_right_power = (rotation_y - rotation_x - rx) / denominator
+        back_right_power = (rotation_y + rotation_x - rx) / denominator
+
+        return (
+            front_left_power,
+            back_left_power,
+            front_right_power,
+            back_right_power
+        )
 
 class Puncher:
     def __init__(self, port):
@@ -228,7 +259,6 @@ class Puncher:
         """
         self.motor.stop(BRAKE)
 
-    
 puncher = Puncher(Ports.PORT7) # Initialize the puncher mechanism
 xdrive = XDrive(Ports.PORT1, Ports.PORT2, Ports.PORT4, Ports.PORT5) # Initialize the XDrive
 controller = Controller() # Initialize the controller
