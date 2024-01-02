@@ -10,6 +10,7 @@
 # Library imports
 from vex import *
 import math
+import time
 
 # Brain should be defined by default
 brain = Brain()
@@ -57,7 +58,7 @@ class XMotorGroup:
         Get the motor from the list of motors.
         """
         return self._motors[index]
-
+    
 class XDrive:
     def __init__(self, m1port, m2port, m3port, m4port, mode = XMode.FLUID):
         """
@@ -239,27 +240,53 @@ class XDrive:
             back_right_power
         )
 
-class Puncher:
+class PunchLauncher:
     def __init__(self, port):
         """
         Initialize the puncher motor.
         """
         self.motor = Motor(port)
-        self.active = False
+        self.speed = 100
 
-    def run(self, speed) -> None:
+    def run(self, speed: int | None = None, direction = FORWARD) -> None:
         """
         Run the puncher motor at the given speed.
         """
-        self.motor.spin(FORWARD, speed, PERCENT)
+        self.motor.spin(direction, speed or self.speed, PERCENT)
+
+    def set(self, speed: int | None = None) -> None:
+        self.motor.spin_to_position(90, DEGREES, speed or self.speed, PERCENT)
 
     def stop(self) -> None:
         """
         Stop the puncher motor.
         """
-        self.motor.stop(BRAKE)
+        self.motor.stop(HOLD)
 
-puncher = Puncher(Ports.PORT7) # Initialize the puncher mechanism
+class Wing:
+    def __init__(self, port):
+        """
+        Initialize the wing motor.
+        """
+        self.motor = Motor(port)
+        self.speed = 100
+
+    def out(self, speed: int | None = None) -> None:
+        """
+        Run the wing motor at the given speed.
+        """
+        self.motor.spin_to_position(90, DEGREES, speed or self.speed, PERCENT)
+        self.motor.stop(HOLD)
+
+    def in_(self, speed: int | None = None) -> None:
+        """
+        Run the wing motor at the given speed.
+        """
+        self.motor.spin_to_position(0, DEGREES, speed or self.speed, PERCENT)
+        self.motor.stop(HOLD)
+
+puncher = PunchLauncher(Ports.PORT19) # Initialize the puncher mechanism
+wing = Wing(Ports.PORT17) # Initialize the wing mechanism
 xdrive = XDrive(Ports.PORT1, Ports.PORT2, Ports.PORT4, Ports.PORT5) # Initialize the XDrive
 controller = Controller() # Initialize the controller
 
@@ -270,17 +297,38 @@ def control_loop():
     """
     while True: 
         # Handle movement for the puncher
-        if controller.buttonA.pressing():
-            puncher.active = not puncher.active
+        if controller.buttonR2.pressing():
+            puncher.run(direction=REVERSE)
 
-        if puncher.active:
-            puncher.run(100)
+        elif controller.buttonR1.pressing() and puncher.motor.position(DEGREES) < 150:
+            puncher.run()
 
-        if controller.buttonR1.pressing():
-            puncher.run(100)
+        else:
+            puncher.stop()
+
+        if controller.buttonA.pressing(): 
+            puncher.set()
+
+        if controller.buttonUp.pressing():
+            if puncher.speed <= 80:
+                puncher.speed += 20
+
+        elif controller.buttonDown.pressing():
+            if puncher.speed >= 20:
+                puncher.speed -= 20
+
+        if controller.buttonL1.pressing():
+            wing.out()
+
+        elif controller.buttonL2.pressing():
+            wing.in_()
+
+        controller.screen.set_cursor(3, 1)
+        controller.screen.print("Speed: {}  ".format(puncher.speed))
 
         # Handle the XDrive movement
         xdrive.process_input(controller)
+        sleep(10)
 
 
 Thread(control_loop()) # Start the control loop
