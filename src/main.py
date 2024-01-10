@@ -15,6 +15,14 @@ import time
 # Brain should be defined by default
 brain = Brain()
 
+def threaded(fn):
+    """
+    Decorator for threading functions.
+    """
+    def wrapper(*args):
+        Thread(fn, args)
+    return wrapper
+
 class XMode:
     """
     The mode of the XDrive.
@@ -209,6 +217,7 @@ class XDrive:
         else:
             if self.mode == XMode.FIELD_CENTRIC:
                 mr1, mr2, mr3, mr4 = self.get_centric_power(left_x, left_y, right_x)
+
             self.group[0].spin(FORWARD, mr1, PERCENT)
             self.group[1].spin(FORWARD, mr2, PERCENT)
             self.group[2].spin(FORWARD, mr3, PERCENT)
@@ -240,13 +249,26 @@ class XDrive:
             back_right_power
         )
 
-class PunchLauncher:
+def check(fn):
+    """
+    Decorator for checking if the robot is running.
+    """
+    def wrapper(*args):
+        if args[0].is_running:
+            return
+        args[0].is_running = True
+        Thread(fn, args)
+        args[0].is_running = False
+    return wrapper
+
+class ObjectSlinger:
     def __init__(self, port):
         """
         Initialize the puncher motor.
         """
         self.motor = Motor(port)
         self.speed = 100
+        self.is_running = False
 
     def run(self, speed: int | None = None, direction = FORWARD) -> None:
         """
@@ -254,8 +276,21 @@ class PunchLauncher:
         """
         self.motor.spin(direction, speed or self.speed, PERCENT)
 
+    # @check
     def set(self, speed: int | None = None) -> None:
+        """
+        Set the launcher to the position ready for launching.
+        """
         self.motor.spin_to_position(90, DEGREES, speed or self.speed, PERCENT)
+
+    # @check
+    def launch(self, speed: int | None = None) -> None:
+        """
+        Launch anything currently in the launcher by going back, then going forward all the way.
+        """
+        self.motor.spin_to_position(30, DEGREES, 20, PERCENT)
+        wait(1)
+        self.motor.spin_to_position(180, DEGREES, speed or self.speed, PERCENT)
 
     def stop(self) -> None:
         """
@@ -268,69 +303,109 @@ class Wing:
         """
         Initialize the wing motor.
         """
-        self.motor = Motor(port)
+        self.motor = Motor(port, GearSetting.RATIO_36_1)
         self.speed = 100
 
+    @threaded
     def out(self, speed: int | None = None) -> None:
         """
         Run the wing motor at the given speed.
         """
-        self.motor.spin_to_position(90, DEGREES, speed or self.speed, PERCENT)
+        self.motor.spin_to_position(120, DEGREES, speed or self.speed, PERCENT)
         self.motor.stop(HOLD)
 
+    @threaded
     def in_(self, speed: int | None = None) -> None:
         """
         Run the wing motor at the given speed.
         """
         self.motor.spin_to_position(0, DEGREES, speed or self.speed, PERCENT)
+        self.motor.spin_for(REVERSE, 10, DEGREES)
         self.motor.stop(HOLD)
 
-puncher = PunchLauncher(Ports.PORT19) # Initialize the puncher mechanism
-wing = Wing(Ports.PORT17) # Initialize the wing mechanism
-xdrive = XDrive(Ports.PORT1, Ports.PORT2, Ports.PORT4, Ports.PORT5) # Initialize the XDrive
-controller = Controller() # Initialize the controller
+class Robot:
+    def __init__(self):
+        self.slinger = ObjectSlinger(Ports.PORT19) # Initialize the puncher mechanism
+        self.wing = Wing(Ports.PORT17) # Initialize the wing mechanism
+        self.xdrive = XDrive(Ports.PORT1, Ports.PORT2, Ports.PORT4, Ports.PORT5) # Initialize the XDrive
+        self.controller = Controller() # Initialize the controller
 
-def control_loop():
-    """
-    The control loop of the XDrive robot. 
-    This is where interactions with the controller take place.
-    """
-    while True: 
-        # Handle movement for the puncher
-        if controller.buttonR2.pressing():
-            puncher.run(direction=REVERSE)
+    def pre_auto(self):
+        self.xdrive.imu.calibrate()
 
-        elif controller.buttonR1.pressing() and puncher.motor.position(DEGREES) < 150:
-            puncher.run()
+    def auto(self):
+        """
+        Autonomous code for the robot.
+        """
+        self.slinger.set(10)
+        wait(100)
+        self.slinger.launch()
 
-        else:
-            puncher.stop()
+        self.xdrive.move_down(50)
+        wait(500)
 
-        if controller.buttonA.pressing(): 
-            puncher.set()
+        while self.xdrive.imu.heading() < 10 or self.xdrive.imu.heading() > 230:
+            print(self.xdrive.imu.heading())
+            self.xdrive.turn_left(20)
 
-        if controller.buttonUp.pressing():
-            if puncher.speed <= 80:
-                puncher.speed += 20
+        self.xdrive.move_down(20)
+        wait(2000)
 
-        elif controller.buttonDown.pressing():
-            if puncher.speed >= 20:
-                puncher.speed -= 20
+        self.xdrive.move_left(20)
+        wait(100)
 
-        if controller.buttonL1.pressing():
-            wing.out()
+        self.xdrive.stop()
+        self.slinger.set()
 
-        elif controller.buttonL2.pressing():
-            wing.in_()
+    def control_loop(self):
+        """
+        The control loop of the XDrive robot. 
+        This is where interactions with the controller take place.
+        """
+        while True:
+            # Handle movement for the puncher
+            if self.controller.buttonR1.pressing():
+                self.slinger.run(None, REVERSE)
 
-        controller.screen.set_cursor(3, 1)
-        controller.screen.print("Speed: {}  ".format(puncher.speed))
+            elif self.controller.buttonR2.pressing() and self.slinger.motor.position(DEGREES) < 150:
+                self.slinger.run()
 
-        # Handle the XDrive movement
-        xdrive.process_input(controller)
-        sleep(10)
+            else:
+                self.slinger.stop()
+
+            if self.controller.buttonB.pressing(): # Set the launcher
+                self.slinger.set()
+
+            if self.controller.buttonY.pressing(): # Launch the launcher
+                self.slinger.launch()
+                self.slinger.set()
+
+            if self.controller.buttonL2.pressing(): # Increase the speed of the launcher
+                if self.slinger.speed <= 80:
+                    self.slinger.speed += 20
+
+            elif self.controller.buttonL1.pressing(): # Decrease the speed of the launcher
+                if self.slinger.speed >= 20:
+                    self.slinger.speed -= 20
+
+            if self.controller.buttonRight.pressing(): # Move the wing out
+                self.wing.out()
+
+            elif self.controller.buttonDown.pressing(): # Move the wing in
+                self.wing.in_()
+
+            self.controller.screen.set_cursor(3, 1)
+            self.controller.screen.print("Speed: {}  ".format(self.slinger.speed))
+
+            # Handle the XDrive movement
+            self.xdrive.process_input(self.controller)
+            sleep(10)
 
 
-Thread(control_loop()) # Start the control loop
+bot = Robot()
 
+# Thread(bot.control_loop)
 
+comp = Competition(bot.control_loop, bot.auto)
+
+bot.pre_auto()

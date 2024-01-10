@@ -4,12 +4,12 @@
 		"json": 2
 	},
 	"project": {
-		"name": "xdrivepyt",
-		"description": "",
+		"name": "OSWALD_TEST",
+		"description": "Object-Slinging World-Aiding Lightweight Doohickey",
 		"creationDate": "12/12/2023, 12:55:06 PM",
 		"platform": "V5",
 		"language": "python",
-		"slot": 4,
+		"slot": 5,
 		"sdkVersion": "V5_1_0_1_15",
 		"python": {
 			"main": "src/main.py"
