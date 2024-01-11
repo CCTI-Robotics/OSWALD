@@ -381,12 +381,12 @@ class Robot:
                 self.slinger.set()
 
             if self.controller.buttonL2.pressing(): # Increase the speed of the launcher
-                if self.slinger.speed <= 80:
-                    self.slinger.speed += 20
+                if self.slinger.speed <= 90:
+                    self.slinger.speed += 10
 
             elif self.controller.buttonL1.pressing(): # Decrease the speed of the launcher
-                if self.slinger.speed >= 20:
-                    self.slinger.speed -= 20
+                if self.slinger.speed >= 10:
+                    self.slinger.speed -= 10
 
             if self.controller.buttonRight.pressing(): # Move the wing out
                 self.wing.out()
