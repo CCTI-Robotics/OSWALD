@@ -306,14 +306,14 @@ class Wing:
         Initialize the wing motor.
         """
         self.motor = Motor(port, GearSetting.RATIO_36_1)
-        self.speed = 100
+        self.speed = 60
 
     @threaded
     def out(self, speed: int | None = None) -> None:
         """
         Run the wing motor at the given speed.
         """
-        self.motor.spin_to_position(120, DEGREES, speed or self.speed, PERCENT)
+        self.motor.spin_to_position(90, DEGREES, speed or self.speed, PERCENT)
         self.motor.stop(HOLD)
 
     @threaded
@@ -322,7 +322,7 @@ class Wing:
         Run the wing motor at the given speed.
         """
         self.motor.spin_to_position(0, DEGREES, speed or self.speed, PERCENT)
-        self.motor.spin_for(REVERSE, 10, DEGREES)
+        self.motor.spin_for(REVERSE, 1, DEGREES)
         self.motor.stop(HOLD)
 
 class Robot:
