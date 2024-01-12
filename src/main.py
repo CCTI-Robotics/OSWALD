@@ -328,7 +328,7 @@ class Wing:
 class Robot:
     def __init__(self):
         self.slinger = ObjectSlinger(Ports.PORT19) # Initialize the puncher mechanism
-        self.wing = Wing(Ports.PORT17) # Initialize the wing mechanism
+        self.wing = Wing(Ports.PORT7) # Initialize the wing mechanism
         self.xdrive = XDrive(Ports.PORT1, Ports.PORT2, Ports.PORT4, Ports.PORT5) # Initialize the XDrive
         self.controller = Controller() # Initialize the controller
 
