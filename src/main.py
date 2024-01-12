@@ -144,8 +144,11 @@ class XDrive:
         left_x = controller.axis4.position()
         right_x = controller.axis1.position()
 
-        if self.mode == XMode.FLUID or self.mode == XMode.FIELD_CENTRIC:
+        if self.mode == XMode.FLUID:
             self.move_fluid(left_y, left_x, right_x)
+
+        elif self.mode == XMode.FIELD_CENTRIC:
+            self.move_centric(left_y, left_x, right_x)
 
         elif self.mode == XMode.SINGLE_MOVE:
             self.move_single(left_y, left_x, right_x)
@@ -223,6 +226,17 @@ class XDrive:
             self.group[2].spin(FORWARD, mr3, PERCENT)
             self.group[3].spin(FORWARD, mr4, PERCENT)
 
+    def move_centric(self, left_y, left_x, right_x) -> None:
+        """
+        Move the XDrive in a field-centric manner.
+        """
+        power = self.get_centric_power(left_x, left_y, right_x)
+
+        self.group[0].spin(FORWARD, power[0], PERCENT)
+        self.group[1].spin(FORWARD, power[1], PERCENT)
+        self.group[2].spin(FORWARD, power[2], PERCENT)
+        self.group[3].spin(FORWARD, power[3], PERCENT)
+
     def get_centric_power(self, x, y, rx) -> tuple[float, float, float, float]:
         """
         To calculate the power of field-centric movement. Still in development and 
@@ -242,24 +256,14 @@ class XDrive:
         front_right_power = (rotation_y - rotation_x - rx) / denominator
         back_right_power = (rotation_y + rotation_x - rx) / denominator
 
+        print(front_left_power, back_left_power, front_right_power, back_right_power)
+
         return (
             front_left_power,
             back_left_power,
             front_right_power,
             back_right_power
         )
-
-def check(fn):
-    """
-    Decorator for checking if the robot is running.
-    """
-    def wrapper(*args):
-        if args[0].is_running:
-            return
-        args[0].is_running = True
-        Thread(fn, args)
-        args[0].is_running = False
-    return wrapper
 
 class ObjectSlinger:
     def __init__(self, port):
@@ -276,14 +280,12 @@ class ObjectSlinger:
         """
         self.motor.spin(direction, speed or self.speed, PERCENT)
 
-    # @check
     def set(self, speed: int | None = None) -> None:
         """
         Set the launcher to the position ready for launching.
         """
         self.motor.spin_to_position(90, DEGREES, speed or self.speed, PERCENT)
 
-    # @check
     def launch(self, speed: int | None = None) -> None:
         """
         Launch anything currently in the launcher by going back, then going forward all the way.
@@ -403,8 +405,6 @@ class Robot:
 
 
 bot = Robot()
-
-# Thread(bot.control_loop)
 
 comp = Competition(bot.control_loop, bot.auto)
 
